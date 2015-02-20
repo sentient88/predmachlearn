@@ -1,0 +1,132 @@
+# Practical Machine Learning Course Project
+
+<br/>
+## Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit, it is now possible to collect a large amount of data about personal activity relatively inexpensively. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+
+In this project, we will use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. Data source: <http://groupware.les.inf.puc-rio.br/har>
+
+The goal of this project is to predict the manner in which they did the exercise (refer to "classe" variable in the data set). After building the prediction model, it will be used to predict 20 different test cases which are provided as part of the assignment.
+
+<br/>
+## Data Preparation & Processing
+
+Download the "training" and "testing" data sets to the working directory. We note that the data sets are in the form of comma-separated-value (csv) files.
+
+We first read in the **training** data from the raw csv file "pml-training.csv": 
+
+```{r, results = "hide"}
+raw_data <- read.csv("pml-training.csv", na.strings= c("NA","","#DIV/0!"))
+summary(raw_data)
+```
+
+As there are many variables with overly high percentage of NA values in the data set, it would be best to exclude them from the prediction model. Hence, we proceed to remove the columns that contain NA values from the data set. The first 7 columns (denoting record IDs, user IDs, timestamps and other non-measurements) are removed too.
+
+```{r, warning = F, message = F}
+NA_columns <- apply(raw_data, 2, function(x) {sum(is.na(x))})
+clean_data <- raw_data[, which(NA_columns == 0)]
+library(dplyr)
+clean_data <- select(clean_data, -(X:num_window))
+```
+
+Using the clean data set "clean_data", we split it into training set (60%) and testing set (40%) by "classe" variable. 
+
+This will allow us to perform cross-validation of the prediction model later (i.e. to build the model using the training set and then evaluate using the testing set which has not been used in the training of model).
+
+```{r, warning = F, message = F}
+library(caret)
+set.seed(133)
+inTrain <- createDataPartition(y = clean_data$classe, p = 0.6, list = FALSE)
+training <- clean_data[inTrain, ]
+testing <- clean_data[-inTrain, ]
+dim(training); dim(testing)
+```
+
+<br/>
+## Exploratory Data Analysis
+
+Next, we check for "near zero variance" predictors. If found, they should be removed from the training set.
+
+```{r}
+nzv <- nearZeroVar(training, saveMetrics=TRUE)
+nzv
+```
+
+Hence, we note that there is no variable with near zero variance.
+
+<br/>
+## Training The Prediction Model
+
+We choose "Random Forests" method to fit the model because of its well-known high level of accuracy among current algorithms. Moreover, it runs efficiently on large data bases and is able to handle thousands of input variables.
+
+
+```{r, warning = F, message = F}
+library(randomForest)
+set.seed(7841)
+modelFit <- randomForest(classe ~ ., data = training)
+modelFit
+```
+
+<br/>
+In Sample Error:
+
+We note that the prediction model has a very small OOB estimate of error rate which is 0.64%. 
+
+**Hence, we would expect the Out of Sample Error to be greater than 0.64%.** 
+
+The Out of Sample Error can be estimated with cross-validation approach which is detailed below. 
+
+<br/>
+## Cross Validation
+
+To evaluate the prediction model: 
+
+We apply the model to the testing set to get the predictions. The predictions are then compared with the actual reference values in the testing set.
+
+```{r}
+predictions <- predict(modelFit, newdata = testing)
+confusionMatrix(predictions, testing$classe)
+```
+
+We note that this prediction model gives a high level of accuracy (0.9949). 
+
+Hence, we can confidently proceed to predict the 20 different test cases provided in the file "pml-testing.csv".
+
+<br/>
+## Predictions for 20 Test Cases
+
+We read in the **testing** data from the raw csv file "pml-testing.csv": 
+
+```{r}
+testcases <- read.csv("pml-testing.csv", na.strings= c("NA","","#DIV/0!"))
+```
+
+We then apply the model to the data set "testcases" to get the predictions. 
+
+```{r}
+predict_testcases <- predict(modelFit, newdata = testcases)
+```
+
+The predictions are submitted in appropriate format to the programming assignment for automated grading.
+
+Results: The predictions for all 20 test cases are correct! 
+
+<br/>
+## The End
+
+<br/>
+```{r}
+## Submission for 20 test cases:
+## 
+## pml_write_files = function(x){
+##  n = length(x)
+##  for(i in 1:n){
+##    filename = paste0("problem_id_",i,".txt")
+##    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+##   }
+##  }
+## 
+## pml_write_files(predict_testcases)
+## This will create 20 text files in the working directory for submission.
+```
